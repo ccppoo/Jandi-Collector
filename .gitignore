@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 secret.json
+secret/
 
 # auth files
 google-spreadsheet/secret/
