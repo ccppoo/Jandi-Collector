@@ -3,8 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# personal and test data
 secret.json
 secret/
+members.json
+
 
 # auth files
 google-spreadsheet/secret/
