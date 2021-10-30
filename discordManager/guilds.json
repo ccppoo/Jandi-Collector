@@ -1,0 +1,16 @@
+{
+    "guild": [
+        {
+            "id": 0,
+            "name": null,
+            "users": [
+                {
+                    "id": null,
+                    "name": null,
+                    "nick": null,
+                    "roles": []
+                }
+            ]
+        }
+    ]
+}
