@@ -7,7 +7,7 @@ __pycache__/
 secret.json
 secret/
 members.json
-
+test.py
 
 # auth files
 google-spreadsheet/secret/
