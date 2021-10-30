@@ -17,6 +17,8 @@ from datetime import datetime
 # 관리할 sheet를 등록하는 절차
 ##### ##### ##### ##### ##### #####
 
+# [<Worksheet '맴버' id:1476414588>, <Worksheet '사라진 맴버' id:1907237778>, <Worksheet '인증' id:1303499944>]
+
 # row, col str
 # TODO : gspread - commit A1 static class for Type Hinting
 A1 = NewType('A1', str)
@@ -80,9 +82,20 @@ class Member:
     name: str
     gitLink: str
     job: str
-    lang: str
     ect: str
     kick: int
+
+    @property
+    def simple(self, ) -> str:
+        if self.__unknown():
+            return 'unknwon Member'
+        return f'{self.name} // {self.job} // {self.gitLink}'
+
+    @property
+    def forUpdate(self, ) -> list:
+        # returns as 1-D list replace None to ''
+        # used when updating cells in sheetManager side
+        return [self.name, self.gitLink, self.job, self.ect, self.kick]
 
     def __str__(self, ) -> str:
         if self.__unknown():
@@ -91,21 +104,14 @@ class Member:
         template += f'[{self.num}]' + f'      {self.name}' + '\n'
         template += f'Git Link : {self.gitLink}\n'
         template += f'Job      : {self.job}\n'
-        template += f'My Power : {self.lang}\n'
         template += f'자기소개 : {self.ect}\n'
         return template
-
-    @property
-    def simple(self, ) -> str:
-        if self.__unknown():
-            return 'unknwon Member'
-        return f'{self.name} // {self.job} // {self.gitLink}'
 
     def __unknown(self, ) -> bool:
         return not (bool(self.name) or bool(self.gitLink))
 
 
-MEMBER_UNKNOWN = Member(0, '', '', '', '', '', 0)
+MEMBER_UNKNOWN = Member(0, '', '', '', '', 0)
 
 # ## TODO : spearate to util function
 
@@ -161,23 +167,33 @@ class JandiSpreadsheetManager:
             self.__sheetName.Commit
         )
 
-    # check and compare member from members.json v
-    def update_checkMember(self):
+    def __update_checkMember(self):
+        # check and compare member from members.json
+        # Local caching
 
         pass
 
-    def getMember(self, name: str, replace_empty=None) -> Member:
+    def __findMember(self, name: str) -> Cell:
         result: Cell = self.memberSheet.find(name, in_column=USER_NAME_COL)
 
         if not result or not result.value == name:
             return MEMBER_UNKNOWN
 
+        return result
+
+    def getMember(self, name: str, replace_empty=None) -> Member:
+        memberCell: Cell = self.__findMember(name)
+
+        if memberCell == MEMBER_UNKNOWN:
+            return MEMBER_UNKNOWN
+
         # y, x
-        start = rowcol_to_a1(result.row, result.col - 1)
-        end = rowcol_to_a1(result.row, result.col - 1 + MEMBER_INFO_width - 1)
+        start = rowcol_to_a1(memberCell.row, memberCell.col - 1)
+        end = rowcol_to_a1(memberCell.row, memberCell.col -
+                           1 + MEMBER_INFO_width - 1)
 
         # expected column length
-        data = [None for replace_empty in range(MEMBER_INFO_width + 1)]
+        data = [None for _ in range(MEMBER_INFO_width)]
 
         reply = self.memberSheet.get_values(
             f'{start}:{end}',
@@ -186,10 +202,10 @@ class JandiSpreadsheetManager:
 
         emptyFilled = [val if val else dafault for val, dafault in zip_longest(
             reply, data, fillvalue=replace_empty)]
-        return emptyFilled
+
+        return Member(*emptyFilled)
 
     def getAllMember(self,) -> list([Member]):
-        # [<Worksheet '맴버' id:1476414588>, <Worksheet '사라진 맴버' id:1907237778>, <Worksheet '인증' id:1303499944>]
 
         # return by row, with empty cell
         rawMembers = self.memberSheet.get_values(
@@ -256,7 +272,7 @@ class JandiSpreadsheetManager:
 
         targetRange = f'{a2}:{a3}'
 
-        # when update, major dimension is always ROW
+        # when update, major dimension is always ROW / 인증인원은 세로로 작성됨
         self.commitSheet.update(
             targetRange,
             [[nick] for nick in toUpdate]
@@ -264,9 +280,64 @@ class JandiSpreadsheetManager:
 
         return True
 
-    def kickMember(self,):
+    def updateMemberInfo(self, name: str, changeInfo: Member):
+        '''
+        updateMemberInfo(<current_nick>, Member( ... ))
+        Member(name = ..., git = ..., job = ..., ect = ..., kicks = ...)
+        if nothing to change, place with None
+        '''
+        memberCell: Cell = self.__findMember(name)
+
+        # value with out member number(맴버 순번 제외한 길이)
+        MEMBER_INFO_width - 1
+
+        # get Cell cordinate of Member who are going to update (without mem. number, 순번 제외)
+        start = rowcol_to_a1(memberCell.row, memberCell.col)
+        end = rowcol_to_a1(
+            memberCell.row, memberCell.col + (MEMBER_INFO_width - 1) - 1
+        )
+
+        # print(f'{start=}:{end=}')
+
+        reply = self.memberSheet.get_values(
+            f'{start}:{end}',
+            value_render_option='UNFORMATTED_VALUE'
+        )[0]
+
+        data = [None for _ in range(MEMBER_INFO_width-1)]
+
+        for i, v in enumerate(reply):
+            data[i] = v
+
+        print(f'BEFORE :: {data=}')
+
+        for i, change in enumerate(changeInfo.forUpdate):
+            if not change is None:
+                data[i] = change
+
+        print(f'AFTER :: {data=}')
+
+        # when update, major dimension is always ROW / 맴버 정보는 가로로
+        resp = self.memberSheet.update(
+            f'{start}:{end}',
+            [data]
+        )  # ok!
+
+        print(resp)
+
+    def addMember(self, name: str):
+        '''
+        updateMemberInfo(<nick>, Member( ... ))
+        Member(name = ..., git = ..., job = ..., ect = ..., kicks = ...)
+        throws error when name is None / place with None if no data
+        '''
+        # add Member with meta data
+        pass
+
+    def kickMember(self, name: str):
         # move member from sheet('맴버') to sheet('사라진 맴버')
         # if member kicked is not latest member, shift members
+        # update '강퇴 횟수'
 
         pass
 
@@ -275,9 +346,6 @@ class JandiSpreadsheetManager:
 
     def __getRange(self, sheetName: str) -> str:
         pass
-
-    def getCellAddress(self, x: int, y: int):
-        return rowcol_to_a1(y, x)
 
 
 def test():
@@ -297,11 +365,17 @@ if __name__ == '__main__':
 
     sm = JandiSpreadsheetManager(gs=gs)
 
-    # a = sm.memberSheet.get_values(
-    #     'sample',
-    #     value_render_option='UNFORMATTED_VALUE'
-    # )
-    a = sm.updateCommit(['sally', 'ccppoo', '현', '냠냠'], True)
+    # using Member class as data carrier
+    sm.updateMemberInfo('ccpo', Member(0, None, None, 'student', None, None))
+
+    # using Member class as data carrier
+    a = sm.updateMemberInfo('ccpo', Member(
+        None, None, None, 'student', None, None))
+
+    print(a)
+    exit()
+
+    a = sm.updateCommit(['nick_1', 'nick_2', 'nick_3', 'nick_4'], True)
     print(a)
     exit()
     a = sm.commitSheet.get(
